@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:as400="http://www.mulesoft.org/schema/mule/as400" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/as400 http://www.mulesoft.org/schema/mule/as400/current/mule-as400.xsd">
+	
+	<configuration-properties file="app.properties" doc:name="Configuration properties"/>
+	
+	<as400:config name="AS400_Config" doc:name="AS400 Config">
+		<as400:config-connection endpoint="${as400.endpoint}" userid="${as400.user}" password="${as400.pwd}" />
+	</as400:config>
+	
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config">
+		<http:listener-connection host="localhost" port="8081" />
+	</http:listener-config>
+
+	<flow name="callAS400Command">
+		<http:listener config-ref="HTTP_Listener_config" path="/commandCall" doc:name="Listener"/>
+		<logger level="INFO" doc:name="Logger" doc:id="830a5c31-6e1e-47b5-9e51-03c1f40f510b" message="Received the request to run the command: #[attributes.queryParams.command]"/>
+		<set-variable variableName="command" value="#[attributes.queryParams.command]" doc:name="Set command"/>
+		<as400:command-call config-ref="AS400_Config" doc:name="Command call">
+			<as400:cmd><![CDATA[#[vars.command]]]></as400:cmd>
+		</as400:command-call>
+		<set-payload
+				value="#['commandCall: command \'' ++ vars.command ++ '\' executed successfully']"
+				encoding="UTF-8"
+				mimeType="text/plain"
+				doc:name="Set Payload"/>
+		<logger level="INFO" doc:name="Logger" doc:id="7fa4f6da-b38c-4239-82f1-0c2aad120843" message="Command executed successfully"/>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="false" type="AS400:COMMAND_CALL_FAILED" doc:name="On Error Continue">
+				<logger level="WARN" doc:name="Logger" doc:id="ec1f2d3c-80ff-450c-a62e-85156ea31da2" message="Command failed! #[message.error]"/>
+				<set-payload
+						value='#["commandCall operation failed. Command:  " ++ vars.command]'
+						encoding="UTF-8"
+						mimeType="text/plain"
+						doc:name="Set Payload"/>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>
